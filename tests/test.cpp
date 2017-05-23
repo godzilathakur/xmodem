@@ -1206,7 +1206,7 @@ TEST_F(XModemTests, XMODEM_RECEIVE_SUCCESS_READ_BLOCK)
   EXPECT_EQ(true, xmodem_receive_process(0));
   EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
 
-  receiver_returned_inbound_size = 1; 
+  receiver_returned_inbound_size = 1;
   receiver_outbound_buffer[0] = C;
 
 #if 0
@@ -1261,9 +1261,134 @@ TEST_F(XModemTests, XMODEM_RECEIVE_ABORT_TRANSFER)
   EXPECT_EQ(true, xmodem_receive_init());
   EXPECT_EQ(XMODEM_RECEIVE_INITIAL, xmodem_receive_state());
 
+  //TODO: Implement unit tests here
+
+  EXPECT_EQ(true, xmodem_receive_process(0));
+  EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
+
+  EXPECT_EQ(true, xmodem_receive_process(1));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1000+1));
+  EXPECT_EQ(XMODEM_RECEIVE_TIMEOUT_ACK, xmodem_receive_state());
+
+  // retry 1
+  EXPECT_EQ(true, xmodem_receive_process(0));
+  EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1000 + 1));
+  EXPECT_EQ(XMODEM_RECEIVE_TIMEOUT_ACK, xmodem_receive_state());
+
+  // retry 2
+  EXPECT_EQ(true, xmodem_receive_process(0));
+  EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1000 + 1));
+  EXPECT_EQ(XMODEM_RECEIVE_TIMEOUT_ACK, xmodem_receive_state());
+
+  // retry 3
+  EXPECT_EQ(true, xmodem_receive_process(0));
+  EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1000 + 1));
+  EXPECT_EQ(XMODEM_RECEIVE_TIMEOUT_ACK, xmodem_receive_state());
+
+  // retry 4
+  EXPECT_EQ(true, xmodem_receive_process(0));
+  EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1000 + 1));
+  EXPECT_EQ(XMODEM_RECEIVE_TIMEOUT_ACK, xmodem_receive_state());
+
+  // retry 5
+  EXPECT_EQ(true, xmodem_receive_process(0));
+  EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+  EXPECT_EQ(true, xmodem_receive_process(1000 + 1));
+  EXPECT_EQ(XMODEM_RECEIVE_TIMEOUT_ACK, xmodem_receive_state());
+
+  EXPECT_EQ(true, xmodem_receive_process(1000 + 1));
+  EXPECT_EQ(XMODEM_RECEIVE_ABORT_TRANSFER, xmodem_receive_state());
+
+  EXPECT_EQ(true, xmodem_receive_cleanup());
+}
+
+TEST_F(XModemTests, XMODEM_RECEIVE_TRANSFER_COMPLETE)
+{
+  xmodem_receive_set_callback_write(&receiver_write_data);
+  xmodem_receive_set_callback_read(&receiver_read_data);
+  xmodem_receive_set_callback_is_outbound_full(&receiver_is_outbound_full);
+  xmodem_receive_set_callback_is_inbound_empty(&receiver_is_inbound_empty);
+
+  EXPECT_EQ(true, xmodem_receive_init());
+  EXPECT_EQ(XMODEM_RECEIVE_INITIAL, xmodem_receive_state());
+
   uint32_t timestamp = 0;
 
   //TODO: Implement unit tests here
+
+  EXPECT_EQ(true, xmodem_receive_process(0));
+  EXPECT_EQ(XMODEM_RECEIVE_SEND_C, xmodem_receive_state());
+
+  receiver_returned_inbound_size = 1;
+  receiver_inbound_buffer[0] = ACK;
+
+  timestamp = 1;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+
+  timestamp = timestamp + 10;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_ACK_SUCCESS, xmodem_receive_state());
+
+  receiver_returned_inbound_size = 5;
+  memcpy(receiver_inbound_buffer, "Hello", receiver_returned_inbound_size);
+
+  /* setup current packet */
+  xmodem_packet_t current_packet;
+  uint8_t current_packet_id    = 0;
+  current_packet.preamble      = SOH;
+  current_packet.id            = current_packet_id;
+  current_packet.id_complement = 0xFF - current_packet_id;
+
+  memcpy(current_packet.data, receiver_inbound_buffer, XMODEM_BLOCK_SIZE);
+  xmodem_calculate_crc(current_packet.data, XMODEM_BLOCK_SIZE, &current_packet.crc);
+
+  /* write the CRC appended packet back to inbound buffer */
+  memcpy(receiver_inbound_buffer, &current_packet, sizeof(current_packet));
+
+  timestamp = timestamp + 10;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_READ_BLOCK, xmodem_receive_state());
+
+  timestamp = timestamp + 10000;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_READ_BLOCK_SUCCESS, xmodem_receive_state());
+
+  timestamp = timestamp + 10;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_BLOCK_VALID, xmodem_receive_state());
+
+  timestamp = timestamp + 10;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_BLOCK_ACK, xmodem_receive_state());
+
+  transmitter_returned_write_success = true;
+
+  timestamp = timestamp + 10;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_WAIT_FOR_ACK, xmodem_receive_state());
+
+  receiver_returned_inbound_size = 1;
+  receiver_inbound_buffer[0] = EOT;
+
+  timestamp = timestamp + 10;
+  EXPECT_EQ(true, xmodem_receive_process(timestamp));
+  EXPECT_EQ(XMODEM_RECEIVE_TRANSFER_COMPLETE, xmodem_receive_state());
 
   EXPECT_EQ(true, xmodem_receive_cleanup());
 }
